@@ -1,0 +1,111 @@
+# Alert rules for SecureScore.
+#
+# These rules demonstrate meaningful, business-aware alerting rather than
+# generic infrastructure alerts: as well as watching availability and
+# latency, they alert on the application's own domain signals (health
+# scores and vulnerability counts).
+
+groups:
+
+  # ------------------------------------------------------- availability ----
+  - name: securescore_availability
+    rules:
+
+      - alert: APIDown
+        expr: up{job="securescore-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "SecureScore API is unreachable"
+          description: "Prometheus has been unable to scrape the API for over 1 minute."
+
+      - alert: DatabaseUnreachable
+        expr: securescore_database_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "SecureScore cannot reach PostgreSQL"
+          description: "The database connectivity gauge has reported down for 2 minutes."
+
+  # ----------------------------------------------------------- performance -
+  - name: securescore_performance
+    rules:
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(securescore_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(securescore_http_requests_total[5m]))
+          ) > 0.05
+        for: 3m
+        labels:
+          severity: high
+          team: platform
+        annotations:
+          summary: "Server error rate above 5%"
+          description: "More than 5% of requests returned a 5xx status over the last 5 minutes."
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(securescore_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "p95 request latency above 1 second"
+          description: "95th percentile latency has exceeded 1s for 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: |
+          securescore_nodejs_heap_size_used_bytes
+          / securescore_nodejs_heap_size_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Node.js heap usage above 90%"
+          description: "The process may be approaching an out-of-memory condition."
+
+  # ------------------------------------------------------------- security --
+  - name: securescore_security
+    rules:
+
+      - alert: ProjectScoreCritical
+        expr: securescore_project_health_score < 40
+        for: 1m
+        labels:
+          severity: critical
+          team: appattack
+        annotations:
+          summary: "Project {{ $labels.project_name }} health score is critical"
+          description: "Health score is {{ $value }} (below the critical threshold of 40)."
+
+      - alert: OpenCriticalVulnerabilities
+        expr: securescore_vulnerabilities_open{severity="critical"} > 0
+        for: 5m
+        labels:
+          severity: high
+          team: appattack
+        annotations:
+          summary: "Critical vulnerabilities are open"
+          description: "{{ $value }} critical vulnerabilities remain unresolved across monitored projects."
+
+      - alert: AuthenticationFailureSpike
+        expr: rate(securescore_auth_attempts_total{outcome="failure"}[5m]) > 1
+        for: 3m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Elevated authentication failure rate"
+          description: "Sustained authentication failures may indicate a credential-stuffing attempt."

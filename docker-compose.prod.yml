@@ -1,0 +1,94 @@
+# =============================================================================
+# SecureScore — production environment
+# Used by the Release stage of the Jenkins pipeline.
+#
+# Differences from staging:
+#   - Runs a pre-built, version-tagged image rather than building from source
+#   - Stricter resource limits and log rotation
+#   - Rolling update policy with automatic rollback on failure
+#   - Separate ports so production and staging can run side by side
+# =============================================================================
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: securescore-db-prod
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-securescore}
+      POSTGRES_USER: ${DB_USER:-securescore}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in production}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-securescore}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks:
+      - securescore-prod-net
+
+  api:
+    # Released images are always version-tagged, never :latest.
+    # This makes rollback a single command: change the tag and redeploy.
+    image: securescore-api:${RELEASE_VERSION:?RELEASE_VERSION must be set}
+    container_name: securescore-api-prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_VERSION: ${RELEASE_VERSION}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-securescore}
+      DB_USER: ${DB_USER:-securescore}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in production}
+      LOG_LEVEL: warn
+      RATE_LIMIT_MAX: 60
+    ports:
+      - "${PROD_API_PORT:-8080}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 384M
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 10s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks:
+      - securescore-prod-net
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  securescore-prod-net:
+    driver: bridge

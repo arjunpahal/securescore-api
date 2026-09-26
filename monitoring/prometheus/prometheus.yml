@@ -1,0 +1,27 @@
+# Prometheus configuration for SecureScore
+# Scrapes the API's /metrics endpoint and evaluates alert rules.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: securescore
+    environment: staging
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+
+  - job_name: securescore-api
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['api:3000']
+        labels:
+          service: securescore-api
+          tier: application
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

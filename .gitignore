@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test and coverage output
+coverage/
+test-results/
+.nyc_output/
+junit.xml
+
+# Pipeline artefacts
+trivy-report.*
+security-audit.json
+dependency-check-report.*
+*.tar
+artefacts/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs
+logs/
+*.log
+
+# Build output
+dist/
+build/
