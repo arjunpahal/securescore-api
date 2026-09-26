@@ -1,0 +1,106 @@
+# =============================================================================
+# SecureScore — staging stack deployed by the Jenkins Deploy stage.
+#
+# DESIGN NOTES
+# ------------
+# 1. No bind mounts anywhere. Every piece of configuration is baked into an
+#    image during the Build stage. This is what allows the stack to be
+#    deployed by Jenkins running inside its own container, where host paths
+#    into the workspace do not exist.
+#
+# 2. No image is built here. Every service references a tag produced by the
+#    Build stage, so the Deploy stage deploys exactly the artefact that was
+#    tested — it never rebuilds and never risks deploying different bits.
+#
+# 3. The database port is deliberately not published. Nothing outside the
+#    compose network needs it, and not publishing it keeps the staging
+#    surface area minimal.
+#
+# Deployed with:
+#   docker compose -p securescore-staging -f docker-compose.ci.yml up -d
+# =============================================================================
+
+services:
+
+  postgres:
+    image: securescore-db:${BUILD_VERSION:-latest}
+    container_name: securescore-db-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: securescore
+      POSTGRES_USER: securescore
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-staging_only_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securescore -d securescore"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [securescore]
+
+  api:
+    image: securescore-api:${BUILD_VERSION:-latest}
+    container_name: securescore-api-staging
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: staging
+      PORT: 3000
+      APP_VERSION: ${BUILD_VERSION:-latest}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: securescore
+      DB_USER: securescore
+      DB_PASSWORD: ${DB_PASSWORD:-staging_only_password}
+      JWT_SECRET: ${JWT_SECRET:-staging_only_jwt_secret}
+      LOG_LEVEL: info
+      # Staging runs with relaxed rate limits so the pipeline's traffic
+      # generator can produce enough load for Prometheus to have meaningful
+      # series to scrape. Production keeps the strict application defaults
+      # (100 requests / 15 min globally, 10 / 15 min on auth endpoints) —
+      # see docker-compose.prod.yml, which lowers the global limit further.
+      RATE_LIMIT_MAX: 10000
+      RATE_LIMIT_AUTH_MAX: 1000
+    ports:
+      - "${STAGING_PORT:-3100}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks: [securescore]
+
+  prometheus:
+    image: securescore-prometheus:${BUILD_VERSION:-latest}
+    container_name: securescore-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=24h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - api
+    networks: [securescore]
+
+  grafana:
+    image: securescore-grafana:${BUILD_VERSION:-latest}
+    container_name: securescore-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    networks: [securescore]
+
+networks:
+  securescore:
+    driver: bridge

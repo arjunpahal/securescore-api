@@ -1,32 +1,43 @@
 # =============================================================================
-# SecureScore — production environment
-# Used by the Release stage of the Jenkins pipeline.
+# SecureScore — production stack deployed by the Jenkins Release stage.
 #
-# Differences from staging:
-#   - Runs a pre-built, version-tagged image rather than building from source
-#   - Stricter resource limits and log rotation
-#   - Rolling update policy with automatic rollback on failure
-#   - Separate ports so production and staging can run side by side
+# DIFFERENCES FROM STAGING
+# ------------------------
+# - Runs on port 8081 so it coexists with staging (3100) and Jenkins (8080).
+#   Having both environments live at once is what makes the promotion from
+#   staging to production demonstrable rather than a claim.
+# - Pinned to RELEASE_VERSION with no default. The release must name the exact
+#   version it is promoting; there is no :latest to accidentally deploy.
+# - Resource limits and log rotation, so a runaway process cannot exhaust the
+#   host.
+# - Stricter runtime posture: warn-level logging and a lower rate limit.
+#
+# Deployed with:
+#   RELEASE_VERSION=1.0.42 docker compose -p securescore-prod \
+#     -f docker-compose.prod.yml up -d
+#
+# Rolled back by redeploying the previous version tag — the images are
+# retained locally, so rollback is a redeploy, not a rebuild.
 # =============================================================================
 
 services:
 
   postgres:
-    image: postgres:16-alpine
+    image: securescore-db:${RELEASE_VERSION:?RELEASE_VERSION must be set}
     container_name: securescore-db-prod
     restart: always
     environment:
-      POSTGRES_DB: ${DB_NAME:-securescore}
-      POSTGRES_USER: ${DB_USER:-securescore}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in production}
+      POSTGRES_DB: securescore
+      POSTGRES_USER: securescore
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-prod_placeholder_password}
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-securescore}"]
+      test: ["CMD-SHELL", "pg_isready -U securescore -d securescore"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -35,12 +46,9 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
-    networks:
-      - securescore-prod-net
+    networks: [securescore-prod]
 
   api:
-    # Released images are always version-tagged, never :latest.
-    # This makes rollback a single command: change the tag and redeploy.
     image: securescore-api:${RELEASE_VERSION:?RELEASE_VERSION must be set}
     container_name: securescore-api-prod
     restart: always
@@ -53,42 +61,33 @@ services:
       APP_VERSION: ${RELEASE_VERSION}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-securescore}
-      DB_USER: ${DB_USER:-securescore}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in production}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in production}
+      DB_NAME: securescore
+      DB_USER: securescore
+      DB_PASSWORD: ${DB_PASSWORD:-prod_placeholder_password}
+      JWT_SECRET: ${JWT_SECRET:-prod_placeholder_jwt_secret}
       LOG_LEVEL: warn
       RATE_LIMIT_MAX: 60
     ports:
-      - "${PROD_API_PORT:-8080}:3000"
+      - "${PROD_PORT:-8081}:3000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 12
+      start_period: 15s
     deploy:
-      replicas: 1
       resources:
         limits:
           cpus: '1.0'
           memory: 384M
-      update_config:
-        order: start-first
-        failure_action: rollback
-        delay: 10s
-      rollback_config:
-        parallelism: 1
-        order: stop-first
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
-    networks:
-      - securescore-prod-net
+    networks: [securescore-prod]
 
 volumes:
   postgres_prod_data:
 
 networks:
-  securescore-prod-net:
+  securescore-prod:
     driver: bridge
