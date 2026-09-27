@@ -47,7 +47,7 @@ pipeline {
         // host. host.docker.internal is how Docker Desktop exposes the host
         // to containers; on a Linux host, run the container with
         // --add-host=host.docker.internal:host-gateway.
-        HOST            = 'host.docker.internal'
+        HOST            = 'localhost'
 
         STAGING_PORT    = '3100'
         PROD_PORT       = '8081'   // 8080 is Jenkins itself
@@ -57,10 +57,10 @@ pipeline {
         STAGING_PROJECT = 'securescore-staging'
         PROD_PROJECT    = 'securescore-prod'
 
-        STAGING_URL     = "http://host.docker.internal:3100"
-        PROD_URL        = "http://host.docker.internal:8081"
-        PROM_URL        = "http://host.docker.internal:9091"
-        GRAFANA_URL     = "http://host.docker.internal:3001"
+        STAGING_URL     = "http://localhost:3100"
+        PROD_URL        = "http://localhost:8081"
+        PROM_URL        = "http://localhost:9091"
+        GRAFANA_URL     = "http://localhost:3001"
 
         // Flip to 'true' once a SonarQube/SonarCloud server is configured in
         // Manage Jenkins > System under the name given by SONAR_SERVER, with
