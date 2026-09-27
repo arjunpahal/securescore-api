@@ -63,7 +63,7 @@ scan() {
 
 # Dynamic project lookup — seeded IDs are random UUIDs assigned at DB init
 PROJ_IDS="$(curl -s -H "$AUTH" "${BASE_URL}/api/v1/projects" \
-  | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'")
+  | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
 
 PROJ_ID_1="$(printf '%s\n' "$PROJ_IDS" | sed -n '1p')"
 PROJ_ID_2="$(printf '%s\n' "$PROJ_IDS" | sed -n '2p')"
