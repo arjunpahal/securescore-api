@@ -546,6 +546,7 @@ pipeline {
                     docker compose -p "${PROD_PROJECT}" -f docker-compose.prod.yml up -d
 
                     echo ""
+                    RELEASE_VERSION="${BUILD_VERSION}" \
                     docker compose -p "${PROD_PROJECT}" -f docker-compose.prod.yml ps
                 '''
 
