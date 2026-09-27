@@ -617,8 +617,8 @@ pipeline {
                         echo "Staging URL      : ${STAGING_URL}"
                         echo ""
                         echo "Promotion: images promoted unchanged from staging; no rebuild."
-                        echo "Rollback : RELEASE_VERSION=<previous> docker compose -p ${PROD_PROJECT} \\"
-                        echo "           -f docker-compose.prod.yml up -d"
+                        echo 'Rollback : RELEASE_VERSION=<previous> docker compose -p securescore-prod \\'
+                        echo '           -f docker-compose.prod.yml up -d'
                     } | tee "${REPORT_DIR}/release-notes.txt"
                 '''
             }
