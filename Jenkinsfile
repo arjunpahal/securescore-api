@@ -276,19 +276,11 @@ pipeline {
                 '''
 
                 script {
-                    // Trend visualisation. Wrapped because the exact
-                    // Warnings-NG API varies between plugin versions, and a
-                    // reporting call should never be what fails a build that
-                    // has already passed its explicit gate above.
-                    try {
-                        recordIssues(
-                            enabledForFailure: true,
-                            tools: [esLint(pattern: "${env.REPORT_DIR}/eslint-checkstyle.xml")]
-                        )
-                    } catch (err) {
-                        echo "Warnings-NG visualisation unavailable (${err.message}); " +
-                             "the explicit ESLint gate above already passed."
-                    }
+                    // Warnings-NG / recordIssues skipped — requires the
+                    // "Warnings Next Generation" plugin which is not installed.
+                    // The explicit ESLint gate above (exit 1 on errors) is the
+                    // enforced quality gate; this block is trend visualisation only.
+                    echo "ESLint trend visualisation skipped (Warnings-NG plugin not installed)."
 
                     if (env.SONAR_ENABLED == 'true') {
                         withSonarQubeEnv(env.SONAR_SERVER) {
