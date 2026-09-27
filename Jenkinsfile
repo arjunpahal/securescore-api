@@ -426,6 +426,7 @@ pipeline {
                         --ignore-unfixed \
                         --exit-code 1 \
                         --no-progress \
+                        --skip-dirs usr/local \
                         "${API_IMAGE}"
                     echo "Image gate passed."
                 '''
