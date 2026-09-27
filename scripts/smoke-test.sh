@@ -95,7 +95,7 @@ info "Security posture"
 
 HEADERS="$(curl -s -D - -o /dev/null "${BASE_URL}/health")"
 contains "Sets X-Content-Type-Options" "$HEADERS" "nosniff"
-contains "Sets Content-Security-Policy" "$HEADERS" "content-security-policy"
+contains "Sets Content-Security-Policy" "$HEADERS" "Content-Security-Policy"
 
 if printf '%s' "$HEADERS" | grep -qi "x-powered-by"; then
   red "  FAIL  X-Powered-By header is suppressed"
@@ -157,7 +157,7 @@ STATS="$(curl -s -H "$AUTH" "${BASE_URL}/api/v1/projects/statistics")"
 contains "Statistics endpoint aggregates projects" "$STATS" "total_projects"
 
 check "Unknown project id returns 404" \
-      "$(status_of -H "$AUTH" "${BASE_URL}/api/v1/projects/aaaaaaaa-0000-0000-0000-00000000ffff")" "404"
+      "$(status_of -H "$AUTH" "${BASE_URL}/api/v1/projects/a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")" "404"
 
 check "Malformed project id returns 400" \
       "$(status_of -H "$AUTH" "${BASE_URL}/api/v1/projects/not-a-uuid")" "400"
@@ -191,7 +191,21 @@ check "Unknown severity is rejected" \
 info ""
 info "Write path (persists to the database)"
 
-PROJECT_ID="aaaaaaaa-0000-0000-0000-000000000001"
+SMOKE_PROJECT_NAME="SmokeTest-$(date +%s)"
+CREATE_RESP="$(curl -s -X POST "${BASE_URL}/api/v1/projects" \
+  -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"name\":\"${SMOKE_PROJECT_NAME}\",\"description\":\"CI smoke test\",\"repositoryUrl\":\"https://github.com/example/smoketest\"}")"
+PROJECT_ID="$(printf '%s' "$CREATE_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+
+if [ -n "$PROJECT_ID" ]; then
+  green "  PASS  Write-path project created (${PROJECT_ID})"
+  PASS=$((PASS + 1))
+else
+  red "  FAIL  Write-path project creation failed"
+  red "        response: ${CREATE_RESP}"
+  FAIL=$((FAIL + 1))
+  PROJECT_ID="00000000-0000-4000-8000-000000000000"
+fi
 
 SCAN="$(curl -s -X POST "${BASE_URL}/api/v1/scans" \
   -H "$AUTH" -H 'Content-Type: application/json' \
