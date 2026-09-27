@@ -61,19 +61,27 @@ scan() {
     -d "{\"projectId\":\"$1\",\"findings\":$2}" || true
 }
 
-scan "aaaaaaaa-0000-0000-0000-000000000001" '{"low":2}'
-scan "aaaaaaaa-0000-0000-0000-000000000002" '{"medium":3,"low":1}'
-scan "aaaaaaaa-0000-0000-0000-000000000003" '{"high":2,"medium":4}'
-scan "aaaaaaaa-0000-0000-0000-000000000005" '{"medium":2,"low":3}'
-echo "  4 healthy-to-moderate scans recorded."
+# Dynamic project lookup — seeded IDs are random UUIDs assigned at DB init
+PROJ_IDS="$(curl -s -H "$AUTH" "${BASE_URL}/api/v1/projects" \
+  | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'")
 
-# --- Phase 3: a deliberate critical finding ----------------------------------
-# Drives one project into the CRITICAL band, which raises an alert through the
-# application's own alerting path and satisfies the ProjectScoreCritical
-# Prometheus rule.
-info ""
-info "Phase 3/4 — incident simulation: driving a project into CRITICAL"
-scan "aaaaaaaa-0000-0000-0000-000000000004" '{"critical":4,"high":7,"medium":12,"low":3}'
+PROJ_ID_1="$(printf '%s\n' "$PROJ_IDS" | sed -n '1p')"
+PROJ_ID_2="$(printf '%s\n' "$PROJ_IDS" | sed -n '2p')"
+PROJ_ID_3="$(printf '%s\n' "$PROJ_IDS" | sed -n '3p')"
+PROJ_ID_4="$(printf '%s\n' "$PROJ_IDS" | sed -n '4p')"
+PROJ_ID_5="$(printf '%s\n' "$PROJ_IDS" | sed -n '5p')"
+
+info "  IDs: ${PROJ_ID_1} / ${PROJ_ID_2} / ${PROJ_ID_3}"
+
+# Phase 2: Submit scans using real project UUIDs
+[ -n "$PROJ_ID_1" ] && scan "$PROJ_ID_1" '{"low":2}'
+[ -n "$PROJ_ID_2" ] && scan "$PROJ_ID_2" '{"medium":3,"low":1}'
+[ -n "$PROJ_ID_3" ] && scan "$PROJ_ID_3" '{"high":2,"medium":4}'
+[ -n "$PROJ_ID_5" ] && scan "$PROJ_ID_5" '{"medium":2,"low":3}'
+
+# Phase 3: Critical incident — 4th project or fallback to 1st
+INCIDENT_PROJECT="${PROJ_ID_4:-${PROJ_ID_1}}"
+[ -n "$INCIDENT_PROJECT" ] && scan "$INCIDENT_PROJECT" '{"critical":4,"high":7,"medium":12,"low":3}'
 echo "  Smishing Detection driven to a CRITICAL score."
 
 # --- Phase 4: authentication failure spike -----------------------------------
