@@ -1,26 +1,40 @@
 # =============================================================================
-# PostgreSQL image with SecureScore migrations baked in.
-#
-# WHY THIS EXISTS
-# ---------------
-# The development docker-compose.yml bind-mounts ./db/migrations into the
-# postgres container. That works on a developer laptop, but it breaks when
-# the deployment is driven by Jenkins running inside its own container:
-# bind-mount source paths are resolved by the Docker DAEMON on the host, and
-# the Jenkins workspace lives inside a Docker volume that the host filesystem
-# does not expose at that path.
-#
-# Baking the migrations into an image removes the dependency on host paths
-# entirely. It is also the better practice for anything beyond local dev,
-# because the schema is then versioned and promoted as an immutable artefact
-# alongside the application image rather than read from a mutable directory.
+# SecureScore API — multi-stage Docker image
+# Stage 1: deps   — installs production dependencies only
+# Stage 2: runner — non-root, minimal runtime image
 # =============================================================================
 
-FROM postgres:16-alpine
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Scripts in this directory are executed in alphabetical order by the postgres
-# entrypoint, but only on first initialisation of an empty data directory.
-COPY migrations/ /docker-entrypoint-initdb.d/
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS runner
+WORKDIR /app
 
-LABEL org.opencontainers.image.title="SecureScore Database" \
-      org.opencontainers.image.description="PostgreSQL 16 with SecureScore schema and seed data"
+ARG BUILD_VERSION=dev
+ARG BUILD_NUMBER=0
+ARG GIT_COMMIT=unknown
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    BUILD_VERSION=${BUILD_VERSION} \
+    BUILD_NUMBER=${BUILD_NUMBER} \
+    GIT_COMMIT=${GIT_COMMIT}
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY src/ ./src/
+COPY package.json ./
+
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget -qO- http://localhost:3000/health || exit 1
+
+CMD ["node", "src/server.js"]
