@@ -197,17 +197,31 @@ pipeline {
 
                     script {
                         if (fileExists('coverage/coverage-summary.json')) {
-                            def cov = readJSON file: 'coverage/coverage-summary.json'
-                            def t = cov.total
+                            def stmtPct = sh(
+                                script: "jq -r '.total.statements.pct' coverage/coverage-summary.json",
+                                returnStdout: true
+                            ).trim()
+                            def branchPct = sh(
+                                script: "jq -r '.total.branches.pct' coverage/coverage-summary.json",
+                                returnStdout: true
+                            ).trim()
+                            def funcPct = sh(
+                                script: "jq -r '.total.functions.pct' coverage/coverage-summary.json",
+                                returnStdout: true
+                            ).trim()
+                            def linePct = sh(
+                                script: "jq -r '.total.lines.pct' coverage/coverage-summary.json",
+                                returnStdout: true
+                            ).trim()
                             echo """
 === Coverage summary ===
-  Statements : ${t.statements.pct}%  (${t.statements.covered}/${t.statements.total})
-  Branches   : ${t.branches.pct}%  (${t.branches.covered}/${t.branches.total})
-  Functions  : ${t.functions.pct}%  (${t.functions.covered}/${t.functions.total})
-  Lines      : ${t.lines.pct}%  (${t.lines.covered}/${t.lines.total})
+  Statements : ${stmtPct}%
+  Branches   : ${branchPct}%
+  Functions  : ${funcPct}%
+  Lines      : ${linePct}%
 """
                             currentBuild.description =
-                                "v${env.BUILD_VERSION} | coverage ${t.statements.pct}%"
+                                "v${env.BUILD_VERSION} | coverage ${stmtPct}%"
                         }
                     }
                 }
