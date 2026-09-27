@@ -51,7 +51,7 @@ pipeline {
 
         STAGING_PORT    = '3100'
         PROD_PORT       = '8081'   // 8080 is Jenkins itself
-        PROMETHEUS_PORT = '9090'
+        PROMETHEUS_PORT = '9091'   // 9090 is Jenkins WAR; use 9091 for Prometheus
         GRAFANA_PORT    = '3001'
 
         STAGING_PROJECT = 'securescore-staging'
@@ -59,7 +59,7 @@ pipeline {
 
         STAGING_URL     = "http://host.docker.internal:3100"
         PROD_URL        = "http://host.docker.internal:8081"
-        PROM_URL        = "http://host.docker.internal:9090"
+        PROM_URL        = "http://host.docker.internal:9091"
         GRAFANA_URL     = "http://host.docker.internal:3001"
 
         // Flip to 'true' once a SonarQube/SonarCloud server is configured in
