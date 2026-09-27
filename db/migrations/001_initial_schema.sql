@@ -55,18 +55,20 @@ CREATE TABLE IF NOT EXISTS projects (
 -- Scans
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scans (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id    UUID        NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-    score         INTEGER     NOT NULL CHECK (score BETWEEN 0 AND 100),
-    rating        TEXT        NOT NULL
-                              CHECK (rating IN ('HEALTHY', 'MODERATE', 'AT_RISK', 'CRITICAL')),
-    should_alert  BOOLEAN     NOT NULL DEFAULT FALSE,
-    triggered_by  UUID        REFERENCES users (id) ON DELETE SET NULL,
-    scanned_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id       UUID        NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+    score            INTEGER     NOT NULL CHECK (score BETWEEN 0 AND 100),
+    rating           TEXT        NOT NULL
+                                 CHECK (rating IN ('HEALTHY', 'MODERATE', 'AT_RISK', 'CRITICAL')),
+    deduction        INTEGER     NOT NULL DEFAULT 0,
+    staleness_penalty INTEGER    NOT NULL DEFAULT 0,
+    should_alert     BOOLEAN     NOT NULL DEFAULT FALSE,
+    triggered_by     UUID        REFERENCES users (id) ON DELETE SET NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_scans_project_id ON scans (project_id);
-CREATE INDEX IF NOT EXISTS idx_scans_scanned_at  ON scans (scanned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scans_created_at  ON scans (created_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- Scan findings (one row per severity per scan)
